@@ -22,11 +22,23 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Invalid chat request" }, { status: 400 });
   }
 
-  const audit = supabaseAuditSink();
-  const tools = createAssistantTools({ store: supabaseToolStore(), audit });
+  let audit: ReturnType<typeof supabaseAuditSink>;
+  let tools: ReturnType<typeof createAssistantTools>;
+  let model: ReturnType<typeof chatModel>;
+  try {
+    audit = supabaseAuditSink();
+    tools = createAssistantTools({ store: supabaseToolStore(), audit });
+    model = chatModel();
+  } catch (error) {
+    // Usually a missing or invalid environment variable. The message names the
+    // variable but never its value (see formatEnvError).
+    console.error("[chat] server not configured", error);
+    const reason = error instanceof Error ? error.message.split("\n").slice(0, 3).join(" ") : "unknown error";
+    return Response.json({ error: `Server configuration error: ${reason}` }, { status: 500 });
+  }
 
   const result = streamText({
-    model: chatModel(),
+    model,
     instructions: SYSTEM_PROMPT,
     messages: await convertToModelMessages(messages.slice(-MAX_HISTORY), { ignoreIncompleteToolCalls: true }),
     tools,

@@ -15,6 +15,20 @@ const EXAMPLES = [
   "Give table 4 a 10% discount",
 ];
 
+/** Turns a failed chat request into one readable line; never shows raw HTML or stack traces. */
+function readableError(message: string | undefined): string {
+  const fallback = "Something went wrong talking to the assistant.";
+  if (!message) return fallback;
+  try {
+    const body = JSON.parse(message) as { error?: unknown };
+    if (typeof body.error === "string") return body.error;
+  } catch {
+    // not JSON
+  }
+  if (message.trimStart().startsWith("<") || message.length > 300) return `${fallback} (server error)`;
+  return message;
+}
+
 export function OrderingApp() {
   const { messages, sendMessage, status, error, regenerate } = useChat<ChatMessage>({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
@@ -103,7 +117,7 @@ export function OrderingApp() {
 
           {error && (
             <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-900 dark:bg-red-950 dark:text-red-200">
-              {error.message || "Something went wrong talking to the assistant."}{" "}
+              {readableError(error.message)}{" "}
               <button type="button" onClick={() => regenerate()} className="font-semibold underline">
                 Try again
               </button>
