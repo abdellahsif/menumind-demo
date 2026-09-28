@@ -10,7 +10,7 @@ export type LlmProvider = (typeof LLM_PROVIDERS)[number];
 
 /** Default model per provider. Overridable with LLM_MODEL. */
 export const DEFAULT_MODELS: Record<LlmProvider, string> = {
-  google: "gemini-2.5-flash",
+  google: "gemini-3.8-flash",
   anthropic: "claude-sonnet-5",
   openai: "gpt-5-mini",
 };
@@ -31,6 +31,8 @@ export const serverEnvSchema = publicEnvSchema
     GOOGLE_GENERATIVE_AI_API_KEY: z.string().trim().min(1).optional(),
     ANTHROPIC_API_KEY: z.string().trim().min(1).optional(),
     OPENAI_API_KEY: z.string().trim().min(1).optional(),
+    /** Optional OpenAI-compatible endpoint (e.g. a model gateway). Used with LLM_PROVIDER=openai. */
+    OPENAI_BASE_URL: z.url({ error: "OPENAI_BASE_URL must be a valid URL" }).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.SUPABASE_SERVICE_ROLE_KEY === env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {

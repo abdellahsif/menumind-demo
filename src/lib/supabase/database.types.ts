@@ -139,7 +139,12 @@ export type Database = {
       };
     };
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    Functions: {
+      create_pending_order: {
+        Args: { p_table_number: number; p_items: Json };
+        Returns: string;
+      };
+    };
     Enums: {
       order_status: OrderStatus;
     };

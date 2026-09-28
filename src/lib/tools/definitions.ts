@@ -2,7 +2,7 @@ import { z } from "zod";
 import { interpretAllergens } from "@/lib/menu/allergens";
 import { searchMenuItems } from "@/lib/menu/search";
 import { summarizeOrder } from "@/lib/orders/pricing";
-import type { MenuItem, Order, OrderLine, ToolStore } from "@/lib/orders/store";
+import type { MenuItem, Order, ToolStore } from "@/lib/orders/store";
 import type { Json } from "@/lib/supabase/database.types";
 
 /*
@@ -141,12 +141,11 @@ export const toolDefinitions = {
       const problem = checkOrderable(menu, [...merged.keys()]);
       if (problem) return problem;
 
-      const lines: OrderLine[] = [...merged].map(([item_id, qty]) => ({
-        item_id,
-        qty,
-        unit_price_snapshot: menu.get(item_id)!.price,
-      }));
-      const order = await store.createPendingOrder(table, lines);
+      // Checked above for a clear message; the database checks again atomically.
+      const order = await store.createPendingOrder(
+        table,
+        [...merged].map(([item_id, qty]) => ({ item_id, qty })),
+      );
       return { ok: true, order: summarizeOrder(order, menu), next_step: "Waiting for staff to press Confirm." };
     },
   }),

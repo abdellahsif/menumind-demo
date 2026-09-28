@@ -16,6 +16,8 @@ export type OrderLine = {
   unit_price_snapshot: number;
 };
 
+export type OrderItemRequest = { item_id: string; qty: number };
+
 export type Order = {
   id: string;
   table_number: number;
@@ -39,8 +41,11 @@ export interface ToolStore {
   getMenuItem(itemId: string): Promise<MenuItem | null>;
   getOrder(orderId: string): Promise<Order | null>;
 
-  /** Inserts a new order. It is always created as pending. */
-  createPendingOrder(tableNumber: number, lines: OrderLine[]): Promise<Order>;
+  /**
+   * Creates a pending order and its lines atomically. Prices are snapshotted from
+   * the menu at creation time; unknown or unavailable items abort the whole call.
+   */
+  createPendingOrder(tableNumber: number, items: OrderItemRequest[]): Promise<Order>;
 
   /** Updates table number and/or discount. Returns false if the order is not pending. */
   updatePendingOrder(

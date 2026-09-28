@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { generateText, stepCountIs } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it } from "vitest";
@@ -111,20 +111,48 @@ describe("no registered tool can move an order out of pending (except to cancell
     expect([...store.orders.values()].map((o) => o.status)).toEqual(["pending"]);
   });
 
-  it("source code reachable by tools never writes a human-only status", () => {
-    const files = [
-      "src/lib/tools/definitions.ts",
-      "src/lib/tools/execute.ts",
-      "src/lib/tools/registry.ts",
-      "src/lib/orders/store.ts",
-      "src/lib/orders/supabase-store.ts",
-    ];
-    for (const file of files) {
-      const source = readFileSync(file, "utf8");
-      expect(source, file).not.toMatch(/status\s*:\s*["'](confirmed|preparing|ready)["']/);
+  it("source code reachable from the tools or the chat route never writes a human-only status", () => {
+    const reachable = reachableFiles(["src/lib/tools/registry.ts", "src/app/api/chat/route.ts"]);
+    expect(reachable).toContain("src/lib/orders/supabase-store.ts"); // sanity: the walk follows imports
+    for (const file of reachable) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(/status\s*:\s*["'](confirmed|preparing|ready)["']/);
     }
   });
+
+  it("the confirm action cannot be reached from the tools or the chat route", () => {
+    const reachable = reachableFiles(["src/lib/tools/registry.ts", "src/app/api/chat/route.ts"]);
+    expect(reachable).not.toContain("src/lib/orders/confirm.ts");
+    expect(reachable).not.toContain("src/lib/orders/supabase-staff-store.ts");
+    expect(reachable).not.toContain("src/app/actions/orders.ts");
+  });
 });
+
+/** Follows `@/` and relative imports from the entry files and returns every source file reached. */
+function reachableFiles(entries: string[]): string[] {
+  const seen = new Set<string>();
+  const resolve = (from: string, spec: string): string | null => {
+    let base: string;
+    if (spec.startsWith("@/")) base = `src/${spec.slice(2)}`;
+    else if (spec.startsWith(".")) base = new URL(spec, `file:///${from}`).pathname.slice(1);
+    else return null; // package import
+    for (const candidate of [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`]) {
+      if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+    }
+    throw new Error(`Cannot resolve ${spec} from ${from}`);
+  };
+  const visit = (file: string) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const source = readFileSync(file, "utf8");
+    for (const [, fromSpec, bareSpec] of source.matchAll(/(?:import|export)[^"']*?from\s+["']([^"']+)["']|import\s+["']([^"']+)["']/g)) {
+      const spec = fromSpec ?? bareSpec;
+      const target = spec && resolve(file, spec);
+      if (target) visit(target);
+    }
+  };
+  entries.forEach(visit);
+  return [...seen];
+}
 
 describe("through the AI SDK tool loop", () => {
   const usage = {

@@ -69,9 +69,9 @@ You need **Node.js 20.9 or newer** and **Git**. Everything else below is free.
 
 1. In the left sidebar, open **SQL Editor**.
 2. Click **New query**.
-3. Open [supabase/migrations/20260928000000_init.sql](supabase/migrations/20260928000000_init.sql)
-   in this repo, copy all of it, paste it into the editor, and click **Run**.
-   You should see "Success. No rows returned".
+3. Run each file in [supabase/migrations/](supabase/migrations/) in filename order
+   (start with `20260928000000_init.sql`). For each: copy all of it, paste it into a
+   new query, and click **Run**. You should see "Success. No rows returned".
 4. Click **New query** again, paste the contents of [supabase/seed.sql](supabase/seed.sql),
    and click **Run**.
 5. Open **Table Editor** → `menu_items`. You should see 16 rows.

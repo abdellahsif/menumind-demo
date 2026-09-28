@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AuditEntry, AuditSink, MenuItem, Order, OrderLine, ToolStore } from "@/lib/orders/store";
+import type { AuditEntry, AuditSink, MenuItem, Order, OrderItemRequest, OrderLine, ToolStore } from "@/lib/orders/store";
 import type { OrderStatus } from "@/lib/supabase/database.types";
 
 /** Mirrors the special rows in supabase/seed.sql plus a few normal ones. */
@@ -110,14 +110,17 @@ export class MemoryStore implements ToolStore {
     return order ? structuredClone(order) : null;
   }
 
-  async createPendingOrder(tableNumber: number, lines: OrderLine[]) {
+  /** Mirrors the create_pending_order SQL function: all or nothing, prices from the menu. */
+  async createPendingOrder(tableNumber: number, items: OrderItemRequest[]) {
+    const bad = items.filter((i) => !this.menu.get(i.item_id)?.available).map((i) => i.item_id);
+    if (bad.length > 0) throw new Error(`unknown or unavailable menu items: ${bad.join(", ")}`);
     const order: Order = {
       id: randomUUID(),
       table_number: tableNumber,
       status: "pending",
       discount_percent: 0,
       created_at: new Date().toISOString(),
-      lines: structuredClone(lines),
+      lines: items.map((i) => ({ ...i, unit_price_snapshot: this.menu.get(i.item_id)!.price })),
     };
     this.orders.set(order.id, order);
     this.writes.push({ method: "createPendingOrder", orderId: order.id });
@@ -138,6 +141,31 @@ export class MemoryStore implements ToolStore {
     if (order?.status !== "pending") return false;
     order.lines = structuredClone(lines);
     return true;
+  }
+
+  // --- StaffOrderStore (human-only). Present on the same object the tools receive,
+  // so the safety tests prove tools never reach for them even when they exist.
+
+  async refreshPendingPrices(orderId: string, lines: OrderLine[]) {
+    this.writes.push({ method: "refreshPendingPrices", orderId });
+    const order = this.orders.get(orderId);
+    if (order?.status !== "pending") return false;
+    order.lines = structuredClone(lines);
+    return true;
+  }
+
+  async confirmIfPending(orderId: string) {
+    this.writes.push({ method: "confirmIfPending", orderId });
+    await Promise.resolve(); // let concurrent callers interleave, like real requests
+    const order = this.orders.get(orderId);
+    if (order?.status !== "pending") return false;
+    this.statusWrites.push({ orderId, from: "pending", to: "confirmed" });
+    order.status = "confirmed";
+    return true;
+  }
+
+  async cancelIfPending(orderId: string) {
+    return this.cancelPendingOrder(orderId);
   }
 
   async cancelPendingOrder(orderId: string) {

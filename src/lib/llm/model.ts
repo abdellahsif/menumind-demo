@@ -18,7 +18,10 @@ export function chatModel(env: ServerEnv = serverEnv()): LanguageModel {
       return createGoogle({ apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY })(modelId);
     case "anthropic":
       return createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })(modelId);
-    case "openai":
-      return createOpenAI({ apiKey: env.OPENAI_API_KEY })(modelId);
+    case "openai": {
+      const openai = createOpenAI({ apiKey: env.OPENAI_API_KEY, baseURL: env.OPENAI_BASE_URL });
+      // OpenAI-compatible gateways reliably support Chat Completions; the Responses API is OpenAI-only.
+      return env.OPENAI_BASE_URL ? openai.chat(modelId) : openai(modelId);
+    }
   }
 }

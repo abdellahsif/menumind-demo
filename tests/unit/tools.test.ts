@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { executeTool } from "@/lib/tools/execute";
 import { makeDeps } from "./support/memory-store";
 
@@ -101,6 +101,19 @@ describe("create_pending_order", () => {
     const result = await run("create_pending_order", { table: 1, items: [{ item_id: "quattro-formaggi-pizza", qty: 1 }] }, deps);
     expect(result).toMatchObject({ ok: false, error: "item_unavailable" });
     expect(store.orders.size).toBe(0);
+  });
+
+  it("leaves no order behind if an item becomes unavailable between the check and the insert", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { store, deps } = makeDeps();
+    const staleMenu = await store.listMenu(); // the tool's check still sees cola as available
+    store.listMenu = async () => staleMenu;
+    store.menu.get("cola")!.available = false; // ...but the atomic create sees the truth
+
+    const result = await run("create_pending_order", { table: 1, items: [{ item_id: "cola", qty: 1 }] }, deps);
+    expect(result).toMatchObject({ ok: false, error: "internal_error" });
+    expect(store.orders.size).toBe(0);
+    vi.restoreAllMocks();
   });
 
   it("refuses unknown items", async () => {

@@ -62,21 +62,13 @@ export function supabaseToolStore(db: AdminClient = supabaseAdmin()): ToolStore 
       return row ? toOrder(row as OrderRow) : null;
     },
 
-    async createPendingOrder(tableNumber, lines) {
-      // No status is sent: the column default and the insert trigger make it pending.
-      const { data: order, error } = await db
-        .from("orders")
-        .insert({ table_number: tableNumber })
-        .select("id")
-        .single();
-      if (error || !order) throw new Error(`create order: ${error?.message ?? "no row returned"}`);
-      const inserted = await db.from("order_items").insert(lines.map((line) => ({ ...line, order_id: order.id })));
-      if (inserted.error) {
-        // Roll back by hand: supabase-js has no multi-statement transaction.
-        await db.from("orders").delete().eq("id", order.id).eq("status", "pending");
-        throw new Error(`create order items: ${inserted.error.message}`);
-      }
-      const created = await store.getOrder(order.id);
+    async createPendingOrder(tableNumber, items) {
+      // One transaction in Postgres: the order and all its lines, or nothing.
+      const orderId = required(
+        await db.rpc("create_pending_order", { p_table_number: tableNumber, p_items: items }),
+        "create order",
+      );
+      const created = await store.getOrder(orderId);
       if (!created) throw new Error("created order disappeared");
       return created;
     },

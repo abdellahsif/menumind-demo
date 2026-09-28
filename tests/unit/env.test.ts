@@ -40,6 +40,14 @@ describe("server environment", () => {
     ).not.toThrow();
   });
 
+  it("accepts an OpenAI-compatible base URL and rejects a malformed one", () => {
+    const openai = { ...valid, LLM_PROVIDER: "openai", OPENAI_API_KEY: "sk-test" };
+    expect(parseEnv(serverEnvSchema, { ...openai, OPENAI_BASE_URL: "https://gateway.example/v1" }).OPENAI_BASE_URL).toBe(
+      "https://gateway.example/v1",
+    );
+    expect(() => parseEnv(serverEnvSchema, { ...openai, OPENAI_BASE_URL: "gateway" })).toThrow(/OPENAI_BASE_URL/);
+  });
+
   it("rejects an unknown provider", () => {
     expect(() => parseEnv(serverEnvSchema, { ...valid, LLM_PROVIDER: "someone-else" })).toThrow(/LLM_PROVIDER/);
   });
